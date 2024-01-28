@@ -22,13 +22,12 @@ public:
 			buffer_capacity = 0;
 		}
 		else {
-			buffer_capacity = (reserve/CHUNK)+1;
+			buffer_capacity = (reserve/CHUNK)*CHUNK+CHUNK;
 		}
-		buffer = new char[buffer_capacity*CHUNK];
+		buffer = new char[buffer_capacity];
 		read_index = write_index = 0;
 	}
 	~CircBuf(){
-		delete []buffer;
 	}
 	size_t	size(){
 		return buffer_size;
@@ -100,10 +99,108 @@ public:
 			write_index++;
 		}
 	}
-	char		get();
-	string	get(size_t);
-	string	flush();	// Returns a string with all the characters, AND shrinks the buffer to zero.	
-	string	examine();	
-	void		shrink();	// Reduces the unused space in the buffer.
+	char		get() {
+		return *(buffer+read_index);
+		*(buffer+read_index)='\0';
+		if (!(read_index == write_index)) {
+			read_index++;
+		}
+	}
+	std::string	get(size_t amount) {
+		std::string output = "";
+		if ((read_index+amount >= write_index) || (read_index+amount > buffer_capacity && read_index+amount-buffer_capacity >= write_index)) {
+			if (read_index < write_index) {
+				for (unsigned int x = 0; x < write_index; x++) {
+					output += *(buffer+read_index);
+					read_index++;
+				}
+			}
+			else if (read_index > write_index) {
+				for (read_index; read_index < buffer_capacity; read_index++) {
+					output += *(buffer+read_index);
+				}
+				read_index = 0;
+				for (unsigned int x = 0; x < write_index; x++) {
+					output += *(buffer+read_index);
+					read_index++;
+				}
+			}
+		}
+		else {
+			if (read_index < write_index) {
+				int new_read_index = read_index+amount;
+				for (int x = 0; x < new_read_index; x++) {
+					output += *(buffer+read_index);
+					read_index++;
+				}
+			}
+			else if (read_index > write_index) {
+				if (read_index+amount >= buffer_capacity) {
+					for (read_index; read_index < buffer_capacity; read_index++) {
+						output += *(buffer+read_index);
+						amount--;
+					}
+					read_index = 0;
+					for (unsigned int x = 0; x <= amount; x++) {
+						output += *(buffer+read_index);
+						read_index++;
+					}
+				}
+				else {
+					for (unsigned int x; x < amount; x++) {
+						output += *(buffer+read_index);
+						read_index;
+					}
+				}
+			}
+		}
+		return output;
+	}
+	string	flush() {	// Returns a string with all the characters, AND shrinks the buffer to zero.
+		return get(buffer_size);
+		shrink();
+	}	
+	string	examine() {
+		std::string current_buffer = "";
+		for (unsigned int x = 0; x < buffer_capacity; x++) {
+			current_buffer += *(buffer+x);
+		}
+		return current_buffer;
+	}	
+	void		shrink() {	// Reduces the unused space in the buffer.
+		size_t temp_buffer_size = buffer_size;
+		size_t temp_buffer_capacity = (buffer_size/CHUNK)*CHUNK+CHUNK;
+		if (temp_buffer_capacity == 0) {
+			delete []buffer;
+			char* buffer = new char[0];
+		}
+		else {
+			char* temp_buffer = new char[temp_buffer_capacity];
+			if (read_index > write_index) {
+			for (unsigned int x = read_index; x <= buffer_capacity; x++) {
+				*(temp_buffer+temp_buffer_size) = *(buffer+x);
+				temp_buffer_size++;
+			}
+			for (unsigned int x = 0; x <=write_index; x++) {
+				*(temp_buffer+temp_buffer_size) = *(buffer+x);
+				temp_buffer_size++;
+			}
+		}
+		else {
+			for (unsigned int x = read_index; x <= write_index; x++) {
+				*(temp_buffer+temp_buffer_size) = *(buffer+x);
+				temp_buffer_size++;
+			}
+		}
+		delete []buffer;
+		buffer = new char[temp_buffer_capacity];
+		for (unsigned int x = 0; x < temp_buffer_size; x++) {
+			*(buffer+x) = *(temp_buffer+x);
+		}
+		delete []temp_buffer;
+		buffer_capacity = temp_buffer_capacity;
+		buffer_size = temp_buffer_size;
+		}
+	}
 };
 #endif
