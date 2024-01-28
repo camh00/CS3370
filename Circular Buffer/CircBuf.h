@@ -1,6 +1,7 @@
 #ifndef CIRCBUF_H
 #define CIRCBUF_H
 
+#include <iostream>
 #include <string>
 #include <cstddef>
 using std::string;
@@ -25,6 +26,7 @@ public:
 			buffer_capacity = (reserve/CHUNK)*CHUNK+CHUNK;
 		}
 		buffer = new char[buffer_capacity];
+		buffer_size = 0;
 		read_index = write_index = 0;
 	}
 	~CircBuf(){
@@ -39,20 +41,22 @@ public:
 		size_t temp_buffer_size = 0;
 		size_t temp_buffer_capacity = buffer_capacity+CHUNK;
 		char* temp_buffer = new char[temp_buffer_capacity];
-		if (read_index > write_index) {
-			for (unsigned int x = read_index; x <= buffer_capacity; x++) {
-				*(temp_buffer+temp_buffer_size) = *(buffer+x);
-				temp_buffer_size++;
+		if (buffer_size != 0) {
+			if (read_index > write_index) {
+				for (unsigned int x = read_index; x <= buffer_capacity; x++) {
+					*(temp_buffer+temp_buffer_size) = *(buffer+x);
+					temp_buffer_size++;
+				}
+				for (unsigned int x = 0; x <=write_index; x++) {
+					*(temp_buffer+temp_buffer_size) = *(buffer+x);
+					temp_buffer_size++;
+				}
 			}
-			for (unsigned int x = 0; x <=write_index; x++) {
-				*(temp_buffer+temp_buffer_size) = *(buffer+x);
-				temp_buffer_size++;
-			}
-		}
-		else {
-			for (unsigned int x = read_index; x <= write_index; x++) {
-				*(temp_buffer+temp_buffer_size) = *(buffer+x);
-				temp_buffer_size++;
+			else {
+				for (unsigned int x = read_index; x <= write_index; x++) {
+					*(temp_buffer+temp_buffer_size) = *(buffer+x);
+					temp_buffer_size++;
+				}
 			}
 		}
 		delete []buffer;
@@ -69,87 +73,106 @@ public:
 		if (write_index == buffer_capacity+1 && read_index > 0) {
 			write_index = 0;
 		}
-		else if ((write_index == buffer_capacity+1 && read_index == 0) || write_index+1 == read_index) {
+		else if ((write_index == buffer_capacity+1 && read_index == 0) || write_index == read_index) {
 			grow();
 		}
 		*(buffer+write_index) = insert_char;
 		write_index++;
+		buffer_size++;
 	}
 	void		insert (const char* insert_chars, size_t sz) {
-		if (write_index+sz >= buffer_capacity+1 && read_index > sz) {
+		if (write_index+sz > buffer_capacity && read_index >= sz-(buffer_capacity-write_index)) {
 			write_index = 0;
 		}
-		else if ((write_index+sz >= buffer_capacity+1 && read_index <= sz) || (write_index < read_index && write_index+sz >= read_index)) {
+		else if ((write_index+sz > buffer_capacity && read_index < sz-(buffer_capacity-write_index)) || (write_index < read_index && write_index+sz >= read_index)) {
 			grow();
 		}
-		for (unsigned int x = 0; x < sz; x++){
-			*(buffer+write_index) = *insert_chars+x;
+		for (unsigned int x = 0; x < sz; x++) {
+			*(buffer+write_index) = *(insert_chars+x);
 			write_index++;
+			buffer_size++;
 		}
 	}
 	void		insert(const string& insert_string) {
-		if (write_index+insert_string.length() >= buffer_capacity+1 && read_index > insert_string.length()) {
+		if (write_index+insert_string.length() > buffer_capacity && read_index >= insert_string.length()-(buffer_capacity-write_index)) {
 			write_index = 0;
 		}
-		else if ((write_index+insert_string.length() >= buffer_capacity+1 && read_index <= insert_string.length()) || (write_index < read_index && write_index+insert_string.length() >= read_index)) {
+		else if ((write_index+insert_string.length() > buffer_capacity && read_index < insert_string.length()-(buffer_capacity-write_index)) || (write_index < read_index && write_index+insert_string.length() >= read_index)) {
 			grow();
 		}
 		for (unsigned int x = 0; x < insert_string.length(); x++){
 			*(buffer+write_index) = insert_string[x];
 			write_index++;
+			buffer_size++;
 		}
 	}
 	char		get() {
-		return *(buffer+read_index);
-		*(buffer+read_index)='\0';
-		if (!(read_index == write_index)) {
+		if (read_index != write_index && buffer_size > 0) {
+			return *(buffer+read_index);
 			read_index++;
+			buffer_size--;
+		}
+		else if (read_index >= buffer_capacity) {
+			return *(buffer+read_index);
+			read_index = 0;
+			buffer_size--;
 		}
 	}
 	std::string	get(size_t amount) {
 		std::string output = "";
-		if ((read_index+amount >= write_index) || (read_index+amount > buffer_capacity && read_index+amount-buffer_capacity >= write_index)) {
-			if (read_index < write_index) {
-				for (unsigned int x = 0; x < write_index; x++) {
-					output += *(buffer+read_index);
-					read_index++;
-				}
-			}
-			else if (read_index > write_index) {
-				for (read_index; read_index < buffer_capacity; read_index++) {
-					output += *(buffer+read_index);
-				}
-				read_index = 0;
-				for (unsigned int x = 0; x < write_index; x++) {
-					output += *(buffer+read_index);
-					read_index++;
-				}
-			}
-		}
-		else {
-			if (read_index < write_index) {
-				int new_read_index = read_index+amount;
-				for (int x = 0; x < new_read_index; x++) {
-					output += *(buffer+read_index);
-					read_index++;
-				}
-			}
-			else if (read_index > write_index) {
-				if (read_index+amount >= buffer_capacity) {
-					for (read_index; read_index < buffer_capacity; read_index++) {
-						output += *(buffer+read_index);
-						amount--;
-					}
-					read_index = 0;
-					for (unsigned int x = 0; x <= amount; x++) {
+		if (static_cast<int>(buffer_size)-static_cast<int>(amount) > 0) {
+			if ((read_index+amount >= write_index) || (read_index+amount > buffer_capacity && read_index+amount-buffer_capacity >= write_index)) {
+				if (read_index < write_index) {
+					for (unsigned int x = 0; x < write_index; x++) {
 						output += *(buffer+read_index);
 						read_index++;
+						buffer_size--;
 					}
 				}
-				else {
-					for (unsigned int x; x < amount; x++) {
+				else if (read_index > write_index) {
+					for (unsigned int x = read_index; x < buffer_capacity; x++) {
 						output += *(buffer+read_index);
-						read_index;
+						read_index++;
+						buffer_size--;
+					}
+					read_index = 0;
+					for (unsigned int x = 0; x < write_index; x++) {
+						output += *(buffer+read_index);
+						read_index++;
+						buffer_size--;
+					}
+				}
+			}
+			else {
+				if (read_index < write_index) {
+					int new_read_index = read_index+amount;
+					for (int x = 0; x < new_read_index; x++) {
+						output += *(buffer+read_index);
+						read_index++;
+						buffer_size--;
+					}
+				}
+				else if (read_index > write_index) {
+					if (read_index+amount >= buffer_capacity) {
+						for (unsigned int x = read_index; x < buffer_capacity; x++) {
+							output += *(buffer+read_index);
+							read_index++;
+							amount--;
+							buffer_size--;
+						}
+						read_index = 0;
+						for (unsigned int x = 0; x <= amount; x++) {
+							output += *(buffer+read_index);
+							read_index++;
+							buffer_size--;
+						}
+					}
+					else {
+						for (unsigned int x; x < amount; x++) {
+							output += *(buffer+read_index);
+							read_index++;
+							buffer_size--;
+						}
 					}
 				}
 			}
@@ -161,10 +184,39 @@ public:
 		shrink();
 	}	
 	string	examine() {
-		std::string current_buffer = "";
-		for (unsigned int x = 0; x < buffer_capacity; x++) {
-			current_buffer += *(buffer+x);
+		std::string current_buffer = "[";
+		if (read_index <= write_index && read_index > 0) {
+			for (unsigned int x = 0; x < read_index; x++) {
+				current_buffer += '-';
+			}
 		}
+		else if (write_index < read_index && write_index > 0) {
+			for (unsigned int x = 0; x < write_index; x++) {
+				current_buffer += *(buffer+x);
+			}
+		}
+		if (read_index < write_index) {
+			for (unsigned int x = read_index; x < write_index; x++) {
+				current_buffer += *(buffer+x);
+			}
+		}
+		else if (read_index > write_index) {
+			for (unsigned int x = write_index; x < read_index; x++) {
+				current_buffer += '-';
+			}
+		}
+		if (read_index < write_index && write_index < buffer_capacity) {
+			for (unsigned int x = write_index; x < buffer_capacity; x++) {
+				current_buffer += '-';
+			}
+		}
+		else if (read_index > write_index && read_index < buffer_capacity) {
+			for (unsigned int x = write_index; x < buffer_capacity; x++) {
+				current_buffer += *(buffer+x);
+			}
+		}
+		current_buffer += "]";
+		std::cout << current_buffer << std::endl;
 		return current_buffer;
 	}	
 	void		shrink() {	// Reduces the unused space in the buffer.
