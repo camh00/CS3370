@@ -34,7 +34,7 @@ Parameters parseINI(const std::string& iniFile) {
 
     // Parsing INI file
     while (std::getline(file, line)) {
-        // skip empy or commented lines
+        // skip empty or commented lines
         if (line.empty() || line[0] == '#') continue;
         // Search for '=' indicating values
         size_t delimiterPos = line.find('=');
